@@ -1,6 +1,7 @@
 import os
 from pathlib import Path
 from glob import glob
+import shutil
 
 import gradio as gr
 from PIL import Image 
@@ -60,55 +61,143 @@ def judge(image):
     waifu = judge_waifu(image)
     return aesthetic, style, waifu
 
+def classify_outputs_folders(type):
+    if type == "Aesthetic":
+        return ["aesthetic", "not_aesthetic"]
+    elif type == "Style":
+        return ["anime", "other", "real_life", "3d", "manga_like"]
+    elif type == "Waifu":
+        return ["waifu", "not_waifu"]
 
+def output_dir_previews_update(value, classify_type):
+    if value == "":
+        return
+    folders = classify_outputs_folders(classify_type)
+    output_dir_previews = "\n".join([f"- {Path(value)/f}" for f in folders])
+    
+    return f"Output dirs will be created like: \n{output_dir_previews}"
+
+def progress_str(progress):
+    return int(progress * 1000) / 10
+
+def copy_or_move_files(img_path: Path, to: Path, copy, together):
+    img_name = img_path.stem
+    if together:
+        for p in img_path.parent.glob(f"{img_name}.*"):
+            if copy:
+                shutil.copy2(p, to / p.name)
+            else:
+                p.rename(to / p.name)
+    else:
+        if copy:
+            shutil.copy2(img_path, to / img_path.name)
+        else:
+            img_path.rename(to / img_path.name)
+
+def batch_classify(input_dir, output_dir, classify_type, output_style, together):
+    try: 
+        input_dir = Path(input_dir)
+        output_dir = Path(output_dir)
+        image_paths = [p for p in input_dir.iterdir() if (p.is_file and p.suffix.lower() in [".png", ".jpg", ".jpeg", ".webp"])]
+
+        print(f"Found {len(image_paths)} images")
+
+        classifyer = None
+        if classify_type == "Aesthetic":
+            classifyer = judge_aesthetic
+        elif classify_type == "Style":
+            classifyer = judge_style
+        elif classify_type == "Waifu":
+            classifyer = judge_waifu
+
+        folders = classify_outputs_folders(classify_type)
+
+        for f in folders:
+            os.makedirs(output_dir/f, exist_ok=True)
+
+        for i, f in enumerate(image_paths):
+            if f.is_dir():
+                continue
+
+            img = Image.open(f)
+            result = classifyer(img)
+
+            max_score = 0
+            max_label = None
+
+            for label, score in result.items():
+                if score > max_score:
+                    max_score = score
+                    max_label = label
+            
+            if max_label is None:
+                continue
+
+            copy_or_move_files(f, output_dir/max_label, output_style == "Copy", together)
+
+            print(f"Classified {f.name} as {max_label} with {progress_str(max_score)}% confidence")
+
+        return "Done"
+    except Exception as e:
+        return f"Error: {e}"
 
 def on_ui_tabs():
-    batch_progress = 0 # max 1
-    def progress_str():
-        return int(batch_progress * 1000) / 10
-
     with gr.Blocks(analytics_enabled=False) as ui:
-        
-        with gr.Tabs():
-            with gr.TabItem(label='Single'):
-                with gr.Row().style(equal_height=False):
-                    with gr.Column():
-                        # with gr.Tabs():
-                        image = gr.Image(source="upload", label="Image", interactive=True, type="pil")
+        with gr.Column():
+            with gr.Tabs():
+                with gr.TabItem(label='Single'):
+                    with gr.Row().style(equal_height=False):
+                        with gr.Column():
+                            # with gr.Tabs():
+                            image = gr.Image(source="upload", label="Image", interactive=True, type="pil")
 
-                        single_start_btn = gr.Button(value="Judge", variant="primary")
-                    
-                    with gr.Column():
-                        single_aesthetic_result = gr.Label(label="Aesthetic")
-                        single_style_result = gr.Label(label="Style")
-                        single_waifu_result = gr.Label(label="Waifu")
-            
-            with gr.TabItem(label='Batch'):
-                gr.Markdown("Classify images whether are they aesthetic or not, and what style they are.")
+                            single_start_btn = gr.Button(value="Judge", variant="primary")
+                        
+                        with gr.Column():
+                            single_aesthetic_result = gr.Label(label="Aesthetic")
+                            single_style_result = gr.Label(label="Style")
+                            single_waifu_result = gr.Label(label="Waifu")
+                
+                with gr.TabItem(label='Batch'):
 
-                with gr.Row().style(equal_height=False):
-                    with gr.Column():
-                        input_dir = gr.Textbox(label="Image Directory", placeholder="path/to/classify", type="text")
-                        output_dir = gr.Textbox(label="Output Directory", placeholder="path/of/output", type="text")
+                    with gr.Row().style(equal_height=False):
+                        with gr.Column():
+                            input_dir_input = gr.Textbox(label="Image Directory", placeholder="path/to/classify", type="text")
+                            output_dir_input = gr.Textbox(label="Output Directory", placeholder="path/to/output", type="text")
 
-                        batch_start_btn = gr.Button(value="Start", variant="primary")
+                            output_dir_previews_md = gr.Markdown("")
 
-                    with gr.Column():
-                        with gr.Column(variant="panel"):
-                            gr.Markdown(f"#### Progress: {progress_str()}%")
+                            classify_type_radio = gr.Radio(label="Classify type", choices=["Aesthetic", "Style", "Waifu"], value="Aesthetic", interactive=True)
 
-                            # progress = gr.Slider(label="Progress", minimum=0, maximum=100, step=0.1, interactive=False, elem_id="progress_bar")
-                            gr.HTML(f'<div class="h-1 mb-1 rounded bg-gradient-to-r group-hover:from-orange-500 from-orange-400 to-orange-200 dark:from-orange-400 dark:to-orange-600" style="width: {max(progress_str(), 1)}%;"></div>')
+                            output_style_radio = gr.Radio(label="Output style", choices=["Copy", "Move"], value="Copy", interactive=True)
+                            copy_or_move_captions_together = gr.Checkbox(label="Copy or move captions together", value=True, interactive=True)
 
-                        progress_aesthetic_result = gr.Label(label="Aesthetic")
-                        progress_style_result = gr.Label(label="Style")
-                        progress_waifu_result = gr.Label(label="Waifu")
+                            batch_start_btn = gr.Button(value="Start", variant="primary")
 
-                        progress_img = gr.Image(label="Current", interactive=False, type="pil")
+                        with gr.Column():
+                            status_block = gr.Label(label="Status", value="Idle")
+
+                            ## Sadly I don't have a capable to implement progress bar...
+
+                            # with gr.Column(variant="panel"):
+                            #     progress_md = gr.Markdown("#### Progress: 0 %")
+
+                            #     # progress = gr.Slider(label="Progress", minimum=0, maximum=100, step=0.1, interactive=False, elem_id="progress_bar")
+                            #     progress_html = gr.HTML(f'<div class="h-1 mb-1 rounded bg-gradient-to-r group-hover:from-orange-500 from-orange-400 to-orange-200 dark:from-orange-400 dark:to-orange-600" style="width: {1}%;"></div>')
+
+                            # progress_aesthetic_result = gr.Label(label="Aesthetic")
+                            # progress_style_result = gr.Label(label="Style")
+                            # progress_waifu_result = gr.Label(label="Waifu")
+
+                            # progress_img = gr.Image(label="Current", interactive=False, type="pil")
 
         image.change(fn=judge, inputs=image, outputs=[single_aesthetic_result, single_style_result, single_waifu_result])
         single_start_btn.click(fn=judge, inputs=image, outputs=[single_aesthetic_result, single_style_result, single_waifu_result])
 
+        output_dir_input.change(fn=output_dir_previews_update, inputs=[output_dir_input, classify_type_radio], outputs=[output_dir_previews_md])
+        classify_type_radio.change(fn=output_dir_previews_update, inputs=[output_dir_input, classify_type_radio], outputs=[output_dir_previews_md])
+
+        batch_start_btn.click(fn=batch_classify, inputs=[input_dir_input, output_dir_input, classify_type_radio, output_style_radio, copy_or_move_captions_together], outputs=[status_block])
 
     return [(ui, "Aesthetic", "aesthetic")]
 
