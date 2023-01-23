@@ -60,7 +60,13 @@ def judge(image):
     waifu = judge_waifu(image)
     return aesthetic, style, waifu
 
+
+
 def on_ui_tabs():
+    batch_progress = 0 # max 1
+    def progress_str():
+        return int(batch_progress * 1000) / 10
+
     with gr.Blocks(analytics_enabled=False) as ui:
         
         with gr.Tabs():
@@ -78,7 +84,27 @@ def on_ui_tabs():
                         single_waifu_result = gr.Label(label="Waifu")
             
             with gr.TabItem(label='Batch'):
-                gr.Markdown("# Batch")
+                gr.Markdown("Classify images whether are they aesthetic or not, and what style they are.")
+
+                with gr.Row().style(equal_height=False):
+                    with gr.Column():
+                        input_dir = gr.Textbox(label="Image Directory", placeholder="path/to/classify", type="text")
+                        output_dir = gr.Textbox(label="Output Directory", placeholder="path/of/output", type="text")
+
+                        batch_start_btn = gr.Button(value="Start", variant="primary")
+
+                    with gr.Column():
+                        with gr.Column(variant="panel"):
+                            gr.Markdown(f"#### Progress: {progress_str()}%")
+
+                            # progress = gr.Slider(label="Progress", minimum=0, maximum=100, step=0.1, interactive=False, elem_id="progress_bar")
+                            gr.HTML(f'<div class="h-1 mb-1 rounded bg-gradient-to-r group-hover:from-orange-500 from-orange-400 to-orange-200 dark:from-orange-400 dark:to-orange-600" style="width: {max(progress_str(), 1)}%;"></div>')
+
+                        progress_aesthetic_result = gr.Label(label="Aesthetic")
+                        progress_style_result = gr.Label(label="Style")
+                        progress_waifu_result = gr.Label(label="Waifu")
+
+                        progress_img = gr.Image(label="Current", interactive=False, type="pil")
 
         image.change(fn=judge, inputs=image, outputs=[single_aesthetic_result, single_style_result, single_waifu_result])
         single_start_btn.click(fn=judge, inputs=image, outputs=[single_aesthetic_result, single_style_result, single_waifu_result])
