@@ -136,8 +136,9 @@ def batch_classify(input_dir, output_dir, classify_type, output_style, together)
             copy_or_move_files(f, output_dir/max_label, output_style == "Copy", together)
 
             print(f"Classified {f.name} as {max_label} with {progress_str(max_score)}% confidence")
-
-        return "Done"
+        
+        print("All done!")
+        return "Done!"
     except Exception as e:
         return f"Error: {e}"
 
