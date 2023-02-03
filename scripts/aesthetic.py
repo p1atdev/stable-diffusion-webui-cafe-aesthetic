@@ -4,7 +4,9 @@ from glob import glob
 import shutil
 
 import gradio as gr
-from PIL import Image
+from PIL import Image, ImageFile
+
+ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 from webui import wrap_gradio_gpu_call
 from modules import shared, scripts, script_callbacks, ui
