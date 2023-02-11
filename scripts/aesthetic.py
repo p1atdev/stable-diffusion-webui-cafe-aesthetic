@@ -111,7 +111,7 @@ def copy_or_move_files(img_path: Path, to: Path, copy, together):
                 if os.path.exists(p):
                     p.rename(to / p.name)
                 else:
-                    print(f"Not found: {p}")
+                    print(f"Not found: {p}".encode("utf-8"))
     else:
         if copy:
             shutil.copy2(img_path, to / img_path.name)
@@ -175,7 +175,7 @@ def batch_classify(
             )
 
             print(
-                f"Classified {f.name} as {max_label} with {progress_str(max_score)}% confidence"
+                f"Classified {f.name} as {max_label} with {progress_str(max_score)}% confidence".encode("utf-8")
             )
 
         print("All done!")
