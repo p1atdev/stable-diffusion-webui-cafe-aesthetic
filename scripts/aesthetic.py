@@ -318,7 +318,7 @@ def on_ui_tabs():
             outputs=[status_block],
         )
 
-    return [(ui, "Aesthetic", "aesthetic")]
+    return [(ui, "Cafe Aesthetic", "cafe_aesthetic")]
 
 
 script_callbacks.on_ui_tabs(on_ui_tabs)
